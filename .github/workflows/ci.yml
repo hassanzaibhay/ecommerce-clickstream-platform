@@ -35,12 +35,12 @@ jobs:
             types-requests==2.32.0.20241016
 
       - name: Lint with ruff
-        run: ruff check api/
+        run: cd api && ruff check .
 
       - name: Type check with mypy
-        run: mypy api/ --strict --ignore-missing-imports
+        run: cd api && mypy . --strict --ignore-missing-imports
 
       - name: Run tests
-        run: pytest api/tests/ -v --asyncio-mode=auto
+        run: cd api && PYTHONPATH=. pytest tests/ -v --asyncio-mode=auto -o asyncio_default_fixture_loop_scope=function
         env:
           DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test
