@@ -1,0 +1,290 @@
+networks:
+  clickstream-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  namenode_data:
+  datanode_data:
+
+services:
+
+  # ─── Databases ───────────────────────────────────────────────
+  postgres:
+    image: postgres:16.3
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-clickstream}
+      POSTGRES_USER: ${POSTGRES_USER:-clickstream}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clickstream}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clickstream} -d ${POSTGRES_DB:-clickstream}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - clickstream-net
+
+  redis:
+    image: redis:7.4.1-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - clickstream-net
+
+  # ─── Object Storage ──────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    env_file: .env
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks:
+      - clickstream-net
+
+  # ─── Kafka (KRaft) ───────────────────────────────────────────
+  kafka:
+    build:
+      context: .
+      dockerfile: docker/kafka/Dockerfile
+    env_file: .env
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka:9092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - clickstream-net
+
+  # ─── Hadoop ──────────────────────────────────────────────────
+  namenode:
+    build:
+      context: .
+      dockerfile: docker/hadoop/Dockerfile
+    user: "0"   # start as root; bootstrap script chowns the volume then re-execs as hadoop
+    command: ["bash", "/hadoop-bootstrap/bootstrap-namenode.sh"]
+    env_file: .env
+    environment:
+      HADOOP_ROLE: namenode
+      HADOOP_HOME: /opt/hadoop
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      HDFS_NAMENODE_USER: hadoop
+      HDFS_DATANODE_USER: hadoop
+      YARN_RESOURCEMANAGER_USER: hadoop
+      YARN_NODEMANAGER_USER: hadoop
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./docker/hadoop/bootstrap-namenode.sh:/hadoop-bootstrap/bootstrap-namenode.sh:ro
+      - ./hadoop/scripts:/hadoop/scripts:ro
+    ports:
+      - "9870:9870"
+      - "8088:8088"
+    networks:
+      - clickstream-net
+
+  datanode:
+    build:
+      context: .
+      dockerfile: docker/hadoop/Dockerfile
+    user: "0"   # start as root; bootstrap script chowns the volume then re-execs as hadoop
+    command: ["bash", "/hadoop-bootstrap/bootstrap-datanode.sh"]
+    env_file: .env
+    environment:
+      HADOOP_ROLE: datanode
+      HADOOP_HOME: /opt/hadoop
+      JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+      HDFS_NAMENODE_USER: hadoop
+      HDFS_DATANODE_USER: hadoop
+      YARN_RESOURCEMANAGER_USER: hadoop
+      YARN_NODEMANAGER_USER: hadoop
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+      - ./docker/hadoop/bootstrap-datanode.sh:/hadoop-bootstrap/bootstrap-datanode.sh:ro
+    depends_on:
+      - namenode
+    networks:
+      - clickstream-net
+
+  # ─── Spark ───────────────────────────────────────────────────
+  spark-master:
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
+    env_file: .env
+    environment:
+      SPARK_MODE: master
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED: "no"
+      SPARK_SSL_ENABLED: "no"
+      HADOOP_USER_NAME: spark
+      HOME: /tmp
+      USER: spark
+      SPARK_SUBMIT_OPTS: "-Duser.name=spark -Duser.home=/tmp"
+    command: >
+      bash -c "pip install boto3 kafka-python --quiet && /opt/bitnami/scripts/spark/run.sh"
+    ports:
+      - "8081:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark:/spark
+      - ./scripts:/scripts
+      - ./kafka:/kafka
+      - ./data:/data
+    networks:
+      - clickstream-net
+
+  spark-worker:
+    build:
+      context: .
+      dockerfile: docker/spark/Dockerfile
+    env_file: .env
+    environment:
+      SPARK_MODE: worker
+      SPARK_MASTER_URL: spark://spark-master:7077
+      SPARK_WORKER_MEMORY: 4G
+      SPARK_WORKER_CORES: "2"
+      SPARK_RPC_AUTHENTICATION_ENABLED: "no"
+      SPARK_RPC_ENCRYPTION_ENABLED: "no"
+      HADOOP_USER_NAME: spark
+      HOME: /tmp
+      USER: spark
+    volumes:
+      - ./spark:/spark
+      - ./data:/data
+    depends_on:
+      - spark-master
+    networks:
+      - clickstream-net
+
+  # ─── Airflow ─────────────────────────────────────────────────
+  airflow-init:
+    image: apache/airflow:2.9.3
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        airflow db migrate &&
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin
+    env_file: .env
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:-postgresql+psycopg2://clickstream:clickstream@postgres:5432/airflow}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - clickstream-net
+
+  airflow-webserver:
+    image: apache/airflow:2.9.3
+    command: webserver
+    env_file: .env
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:-postgresql+psycopg2://clickstream:clickstream@postgres:5432/airflow}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    depends_on:
+      postgres:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - clickstream-net
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.3
+    command: scheduler
+    env_file: .env
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN:-postgresql+psycopg2://clickstream:clickstream@postgres:5432/airflow}
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    depends_on:
+      - airflow-webserver
+    networks:
+      - clickstream-net
+
+  # ─── API ─────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - clickstream-net
+
+  # ─── Frontend ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - clickstream-net

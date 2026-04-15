@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install \
+            fastapi==0.115.5 \
+            asyncpg==0.30.0 \
+            uvicorn==0.32.1 \
+            pydantic==2.10.2 \
+            python-dotenv==1.0.1 \
+            redis==5.2.0 \
+            pytest==8.3.4 \
+            pytest-asyncio==0.24.0 \
+            httpx==0.28.1 \
+            mypy==1.13.0 \
+            ruff==0.8.4 \
+            types-requests==2.32.0.20241016
+
+      - name: Lint with ruff
+        run: ruff check api/
+
+      - name: Type check with mypy
+        run: mypy api/ --strict --ignore-missing-imports
+
+      - name: Run tests
+        run: pytest api/tests/ -v --asyncio-mode=auto
+        env:
+          DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/test

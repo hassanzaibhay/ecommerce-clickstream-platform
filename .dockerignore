@@ -1,0 +1,15 @@
+.env
+.git
+data/
+node_modules/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+api/.venv/
+terraform/
+*.md
