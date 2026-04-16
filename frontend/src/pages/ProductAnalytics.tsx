@@ -19,6 +19,7 @@ import {
   getCategories,
   fmtNum,
   fmtCurrency,
+  formatLabel,
   type Product,
   type Brand,
   type Category,
@@ -57,7 +58,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       borderRadius: 8,
       padding: '8px 12px',
     }}>
-      <p style={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}>{category || '—'}</p>
+      <p style={{ color: '#f1f5f9', fontWeight: 600, marginBottom: 4 }}>{formatLabel(category)}</p>
       <p style={{ color: '#4ade80', margin: 0 }}>{fmtCurrency(revenue)}</p>
     </div>
   );
@@ -169,8 +170,8 @@ export default function ProductAnalytics() {
                 <tr key={p.product_id} className="text-slate-300 hover:bg-slate-700/30">
                   <td className="py-2 text-slate-500">{i + 1}</td>
                   <td className="py-2">{p.product_id}</td>
-                  <td className="py-2">{p.category || '—'}</td>
-                  <td className="py-2">{p.brand || '—'}</td>
+                  <td className="py-2">{formatLabel(p.category)}</td>
+                  <td className="py-2">{formatLabel(p.brand)}</td>
                   <td className="py-2 text-right">{fmtCurrency(p.price)}</td>
                   <td className="py-2 text-right">{fmtNum(p.views)}</td>
                   <td className="py-2 text-right">{fmtNum(p.carts)}</td>
@@ -197,7 +198,7 @@ export default function ProductAnalytics() {
               <BarChart data={brands.slice(0, 10)} layout="vertical" margin={{ left: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={fmtNum} />
-                <YAxis type="category" dataKey="brand" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis type="category" dataKey="brand" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v: string) => formatLabel(v)} width={100} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: 8 }}
                   formatter={(val: number) => fmtCurrency(val)}
@@ -220,7 +221,7 @@ export default function ProductAnalytics() {
               <tbody className="divide-y divide-slate-700">
                 {brands.map((b) => (
                   <tr key={b.brand} className="text-slate-300">
-                    <td className="py-2 font-medium">{b.brand || '—'}</td>
+                    <td className="py-2 font-medium">{formatLabel(b.brand)}</td>
                     <td className="py-2 text-right">{fmtNum(b.views)}</td>
                     <td className="py-2 text-right">{fmtNum(b.carts)}</td>
                     <td className="py-2 text-right">{fmtNum(b.purchases)}</td>
@@ -262,7 +263,7 @@ export default function ProductAnalytics() {
                   ))}
                 </Pie>
                 <Tooltip content={<CustomTooltip />} />
-                <Legend wrapperStyle={{ color: '#94a3b8' }} />
+                <Legend formatter={(value: string) => formatLabel(value)} wrapperStyle={{ color: '#94a3b8' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -280,7 +281,7 @@ export default function ProductAnalytics() {
               <tbody className="divide-y divide-slate-700">
                 {categories.map((c) => (
                   <tr key={c.category} className="text-slate-300">
-                    <td className="py-2 font-medium">{c.category || '—'}</td>
+                    <td className="py-2 font-medium">{formatLabel(c.category)}</td>
                     <td className="py-2 text-right">{fmtNum(c.views)}</td>
                     <td className="py-2 text-right">{fmtNum(c.carts)}</td>
                     <td className="py-2 text-right">{fmtNum(c.purchases)}</td>

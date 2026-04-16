@@ -93,6 +93,19 @@ export function fmtPercent(n: number): string {
   return `${(n * 100).toFixed(2)}%`;
 }
 
+export function formatLabel(raw: string | null): string {
+  if (!raw) return '—';
+  return raw
+    .split('.')
+    .map(part =>
+      part
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    )
+    .join(' › ');
+}
+
 // ---- API calls ----
 export const getDataRange = (): Promise<DataRange> =>
   api.get('/data-range').then((r) => r.data);

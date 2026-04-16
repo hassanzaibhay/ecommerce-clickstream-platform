@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph Input["📦 Data Source"]
+        CSV["Kaggle Dataset\n285M Events · 14 GB\nOct–Nov 2019"]
+    end
+
+    subgraph Ingestion["🗄️ Ingestion Layer"]
+        MIO["MinIO\nS3-Compatible Store"]
+        KP["Kafka Producer\nPython · 200 ev/s"]
+        KF["Apache Kafka 3.9\nKRaft Mode"]
+    end
+
+    subgraph Batch["⚡ Batch Processing"]
+        SPB["Spark Batch\nPySpark 3.5 · 5 Jobs\nDaily KPIs · Funnel\nAbandonment · Affinity"]
+        HDFS["HDFS\nHadoop 3.4.1"]
+        MR["Hadoop MapReduce\nPython Streaming\nCategory Events\nBrand Revenue"]
+    end
+
+    subgraph Stream["🌊 Stream Processing"]
+        SPS["Spark Structured Streaming\nLocal Mode · 5s micro-batch\nSession State Tracking"]
+    end
+
+    subgraph Orchestration["🎼 Orchestration"]
+        AF["Apache Airflow 2.9\n6-Task DAG\nDaily Schedule"]
+    end
+
+    subgraph Storage["💾 Storage Layer"]
+        PG["PostgreSQL 16\n10 Tables\nBatch + Live Data"]
+        RD["Redis 7.4\nCache"]
+    end
+
+    subgraph Serving["🚀 Serving Layer"]
+        API["FastAPI\n9 REST Endpoints\nSSE Live Stream"]
+        FE["React Dashboard\nTypeScript · Tailwind · Recharts\nOverview · Funnel\nProducts · Live Monitor"]
+    end
+
+    subgraph Cloud["☁️ Cloud Infrastructure"]
+        AWS["AWS\nS3 · RDS · ECS · ECR · VPC"]
+        GCP["GCP\nGCS · Cloud SQL · Cloud Run"]
+    end
+
+    CSV -->|"upload_to_minio.py"| MIO
+    MIO -->|"s3a://"| SPB
+    SPB -->|"JDBC"| PG
+    SPB -->|"HDFS write"| HDFS
+    HDFS -->|"Streaming jar"| MR
+    MR -->|"COPY"| PG
+    CSV -->|"clickstream_producer.py"| KP
+    KP --> KF
+    KF -->|"subscribe"| SPS
+    SPS -->|"foreachBatch"| PG
+    AF -.->|"orchestrates"| SPB
+    AF -.->|"orchestrates"| MR
+    PG --> API
+    RD --> API
+    API -->|"REST + SSE"| FE
+    MIO -.->|"Terraform"| AWS
+    MIO -.->|"Terraform"| GCP

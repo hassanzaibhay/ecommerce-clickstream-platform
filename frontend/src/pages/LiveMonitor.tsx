@@ -1,12 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import type { LiveSession } from '../api/client';
-import { fmtNum } from '../api/client';
-
-const formatCategory = (cat: string | null): string => {
-  if (!cat) return '—';
-  const root = cat.split('.')[0];
-  return root.charAt(0).toUpperCase() + root.slice(1);
-};
+import { fmtNum, formatLabel } from '../api/client';
 
 const timeAgo = (dateStr: string | null): string => {
   if (!dateStr) return '—';
@@ -142,7 +136,7 @@ export default function LiveMonitor() {
                 <td className="py-2 text-right">{s.event_count}</td>
                 <td className="py-2 text-center"><Badge value={s.has_cart} /></td>
                 <td className="py-2 text-center"><Badge value={s.has_purchase} /></td>
-                <td className="py-2">{formatCategory(s.last_category)}</td>
+                <td className="py-2">{formatLabel(s.last_category)}</td>
               </tr>
             ))}
             {sessions.length === 0 && (

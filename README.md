@@ -12,39 +12,14 @@ A production-grade portfolio data engineering project by **Hassan Zaib Hayat**, 
 
 ## Architecture
 
-```
-Kaggle CSV (14 GB, 285M rows)
-        │
-        ▼
-   MinIO (raw/)  ◄──── scripts/upload_to_minio.py
-        │
-        ▼
- Spark Batch Jobs ────────────────────────────────────────┐
-  ├── batch_analytics.py    → daily_metrics (PostgreSQL)  │
-  ├── funnel_analysis.py    → funnel_stats (PostgreSQL)   │
-  ├── cart_abandonment.py   → cart_abandonment (PG)       │
-  ├── product_affinity.py   → product_affinity (PG)       │
-  └── prepare_mapreduce.py  → CSV files on HDFS           │
-        │                                                  │
-        ▼                                                  │
-  Hadoop MapReduce                                         │
-  ├── category_events/      → category_events (PG)        │
-  └── brand_revenue/        → brand_revenue (PG)          │
-        │                                                  │
-        ▼                                                  │
-  Airflow DAG orchestrates entire batch pipeline ──────────┘
-        │
-Kafka Producer (simulates live events)
-        │
-        ▼
-Spark Streaming (clickstream_consumer.py)
-        │
-        ▼
-  live_sessions (PostgreSQL)
-        │
-        ▼
-FastAPI (/api/*) ──► React Dashboard (4 pages)
-```
+![Architecture Diagram](docs/architecture-diagram.png)
+
+<details>
+<summary>View Mermaid source</summary>
+
+See [docs/architecture.mermaid](docs/architecture.mermaid)
+
+</details>
 
 ---
 

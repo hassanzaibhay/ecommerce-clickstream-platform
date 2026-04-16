@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { getDataRange, getFunnel, fmtNum, fmtPercent, type FunnelData } from '../api/client';
+import { getDataRange, getFunnel, fmtNum, fmtPercent, formatLabel, type FunnelData } from '../api/client';
 
 function getLast30Days(maxDate: string) {
   const end = new Date(maxDate);
@@ -137,7 +137,7 @@ export default function FunnelAnalysis() {
                 <tbody className="divide-y divide-slate-700">
                   {data.top_abandonment.map((row) => (
                     <tr key={row.category} className="text-slate-300">
-                      <td className="py-2">{row.category}</td>
+                      <td className="py-2">{formatLabel(row.category)}</td>
                       <td className="py-2 text-right">{fmtNum(row.abandoned_carts)}</td>
                       <td className="py-2 text-right">
                         <span className="text-orange-400 font-medium">
